@@ -1,7 +1,9 @@
 import { t } from '@lingui/macro'
 import Loading from 'components/shared/Loading'
+import { ThemeContext } from 'contexts/themeContext'
 import { V1ProjectContext } from 'contexts/v1/projectContext'
 import { useInfiniteSubgraphQuery } from 'hooks/SubgraphQuery'
+import { DeployedERC20Event } from 'models/subgraph-entities/deployed-erc20-event'
 import { PayEvent } from 'models/subgraph-entities/pay-event'
 import { PrintReservesEvent } from 'models/subgraph-entities/print-reserves-event'
 import { ProjectCreateEvent } from 'models/subgraph-entities/project-create-event'
@@ -11,6 +13,7 @@ import { useContext } from 'react'
 
 import SectionHeader from '../SectionHeader'
 import ActivityTabContent from './ActivityTabContent'
+import DeployedERC20EventElem from './items/DeployedERC20EventElem'
 import PayEventElem from './items/PayEventElem'
 import ProjectCreateEventElem from './items/ProjectCreateEventElem'
 import RedeemEventElem from './items/RedeemEventElem'
@@ -18,6 +21,10 @@ import ReservesEventElem from './items/ReservesEventElem'
 import TapEventElem from './items/TapEventElem'
 
 export default function ProjectActivity() {
+  const {
+    theme: { colors },
+  } = useContext(ThemeContext)
+
   const { projectId } = useContext(V1ProjectContext)
 
   const pageSize = 50
@@ -36,6 +43,10 @@ export default function ProjectActivity() {
       {
         entity: 'payEvent',
         keys: ['amount', 'timestamp', 'beneficiary', 'note', 'id', 'txHash'],
+      },
+      {
+        entity: 'deployedERC20Event',
+        keys: ['symbol', 'txHash', 'timestamp', 'id'],
       },
       {
         entity: 'tapEvent',
@@ -108,24 +119,53 @@ export default function ProjectActivity() {
       >
         {projectEvents?.pages.map(group =>
           group.map(e => {
-            if (e.payEvent)
-              return <PayEventElem event={e.payEvent as PayEvent} />
-            if (e.tapEvent)
-              return <TapEventElem event={e.tapEvent as TapEvent} />
-            if (e.redeemEvent)
-              return <RedeemEventElem event={e.redeemEvent as RedeemEvent} />
-            if (e.printReservesEvent)
-              return (
+            let elem: JSX.Element | undefined = undefined
+
+            if (e.payEvent) {
+              elem = <PayEventElem event={e.payEvent as PayEvent} />
+            }
+            if (e.tapEvent) {
+              elem = <TapEventElem event={e.tapEvent as TapEvent} />
+            }
+            if (e.redeemEvent) {
+              elem = <RedeemEventElem event={e.redeemEvent as RedeemEvent} />
+            }
+            if (e.printReservesEvent) {
+              elem = (
                 <ReservesEventElem
                   event={e.printReservesEvent as PrintReservesEvent}
                 />
               )
-            if (e.projectCreateEvent)
-              return (
+            }
+            if (e.projectCreateEvent) {
+              elem = (
                 <ProjectCreateEventElem
                   event={e.projectCreateEvent as ProjectCreateEvent}
                 />
               )
+            }
+            if (e.deployedERC20Event) {
+              elem = (
+                <DeployedERC20EventElem
+                  event={e.deployedERC20Event as DeployedERC20Event}
+                />
+              )
+            }
+
+            if (!elem) return null
+
+            return (
+              <div
+                key={e.id}
+                style={{
+                  marginBottom: 20,
+                  paddingBottom: 20,
+                  borderBottom: '1px solid ' + colors.stroke.tertiary,
+                }}
+              >
+                {elem}
+              </div>
+            )
           }),
         )}
       </ActivityTabContent>
