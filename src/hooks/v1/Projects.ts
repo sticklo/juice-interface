@@ -6,7 +6,6 @@ import { ProjectState } from 'models/project-visibility'
 import {
   parseTrendingProjectJson,
   Project,
-  ProjectVx,
   TrendingProject,
   TrendingProjectJson,
 } from 'models/subgraph-entities/project'
@@ -27,35 +26,25 @@ import useSubgraphQuery, { useInfiniteSubgraphQuery } from '../SubgraphQuery'
 
 interface ProjectsOptions {
   pageNumber?: number
-  projectId?: BigNumber
+  projectId?: number
   orderBy?: 'createdAt' | 'currentBalance' | 'totalPaid'
   orderDirection?: 'asc' | 'desc'
   pageSize?: number
   state?: ProjectState
   keys?: (keyof Project)[]
   terminalVersion?: V1TerminalVersion
-}
-
-interface ProjectsVxOptions {
-  pageNumber?: number
-  projectId?: number
-  orderBy?: 'createdAt' | 'currentBalance' | 'totalPaid'
-  orderDirection?: 'asc' | 'desc'
-  pageSize?: number
-  state?: ProjectState
-  keys?: (keyof ProjectVx)[]
-  terminalVersion?: V1TerminalVersion
-  cv?: ProjectVx['cv']
+  cv?: Project['cv']
 }
 
 const staleTime = 60 * 1000 // 60 seconds
 
 const keys: (keyof Project)[] = [
   'id',
+  'projectId',
   'handle',
   'creator',
   'createdAt',
-  'uri',
+  'metadataUri',
   'currentBalance',
   'totalPaid',
   'totalRedeemed',
@@ -69,46 +58,6 @@ const queryOpts = (
   | InfiniteGraphQueryOpts<'project', EntityKeys<'project'>>
 > => {
   const where: WhereConfig<'project'>[] = []
-
-  const terminalAddress = getTerminalAddress(opts.terminalVersion)
-
-  if (terminalAddress) {
-    where.push({
-      key: 'terminal',
-      value: terminalAddress,
-    })
-  }
-
-  if (opts.state === 'archived') {
-    where.push({
-      key: 'id',
-      value: archivedProjectIds,
-      operator: 'in',
-    })
-  } else if (opts.projectId) {
-    where.push({
-      key: 'id',
-      value: opts.projectId.toString(),
-    })
-  }
-
-  return {
-    entity: 'project',
-    keys: opts.keys ?? keys,
-    orderDirection: opts.orderDirection ?? 'desc',
-    orderBy: opts.orderBy ?? 'totalPaid',
-    pageSize: opts.pageSize,
-    where,
-  }
-}
-
-const queryOptsVx = (
-  opts: ProjectsVxOptions,
-): Partial<
-  | GraphQueryOpts<'projectVx', EntityKeys<'projectVx'>>
-  | InfiniteGraphQueryOpts<'projectVx', EntityKeys<'projectVx'>>
-> => {
-  const where: WhereConfig<'projectVx'>[] = []
 
   const terminalAddress = getTerminalAddress(opts.terminalVersion)
 
@@ -135,12 +84,12 @@ const queryOptsVx = (
   } else if (opts.projectId) {
     where.push({
       key: 'projectId',
-      value: opts.projectId.toString(),
+      value: opts.projectId,
     })
   }
 
   return {
-    entity: 'projectVx',
+    entity: 'project',
     keys: opts.keys ?? [
       'id',
       'projectId',
@@ -197,7 +146,7 @@ export function useTrendingProjects(count: number, days: number) {
   const [loadingPayments, setLoadingPayments] = useState<boolean>()
   const [projectStats, setProjectStats] = useState<
     Record<
-      string,
+      number,
       {
         trendingVolume: BigNumber
         paymentsCount: number
@@ -207,7 +156,7 @@ export function useTrendingProjects(count: number, days: number) {
 
   // Check if remote cache exists
   const cache = useIpfsCache(
-    IpfsCacheName.trending,
+    IpfsCacheName.trendingV2,
     useMemo(
       () => ({
         // Cache expires every 12 min, will update 5 times an hour. (Arbitrary)
@@ -243,7 +192,7 @@ export function useTrendingProjects(count: number, days: number) {
           'amount',
           {
             entity: 'project',
-            keys: ['id'],
+            keys: ['projectId'],
           },
         ],
         where: [
@@ -259,7 +208,7 @@ export function useTrendingProjects(count: number, days: number) {
       setProjectStats(
         (payments ?? []).reduce(
           (acc, curr) => {
-            const projectId = curr.project.id?.toString()
+            const projectId = curr.project.projectId
 
             return projectId
               ? {
@@ -297,8 +246,8 @@ export function useTrendingProjects(count: number, days: number) {
           entity: 'project',
           keys,
           where: {
-            key: 'id',
-            value: Object.keys(projectStats),
+            key: 'projectId',
+            value: Object.keys(projectStats).map(k => parseInt(k)),
             operator: 'in',
           },
         }
@@ -313,13 +262,19 @@ export function useTrendingProjects(count: number, days: number) {
     data: projectsQuery.data
       ?.map(p => {
         const stats =
-          p.id && projectStats ? projectStats[p.id.toString()] : undefined
+          p.projectId && projectStats ? projectStats[p.projectId] : undefined
 
         // Algorithm to rank trending projects:
         // trendingScore = volume * (number of payments)^2
         const trendingScore = stats?.trendingVolume.mul(
           BigNumber.from(stats.paymentsCount).pow(2),
         )
+
+        console.log('asdf', {
+          trendingScore,
+          trendingVolume: stats?.trendingVolume,
+          trendingPaymentsCount: stats?.paymentsCount,
+        })
 
         return {
           ...p,
@@ -360,7 +315,7 @@ export function useTrendingProjects(count: number, days: number) {
 // Query all projects that a wallet has previously made payments to
 export function useHoldingsProjectsQuery(wallet: string | undefined) {
   const [loadingParticipants, setLoadingParticipants] = useState<boolean>()
-  const [projectIds, setProjectIds] = useState<string[]>()
+  const [projectIds, setProjectIds] = useState<number[]>()
 
   useEffect(() => {
     // Get all participant entities for wallet
@@ -397,13 +352,13 @@ export function useHoldingsProjectsQuery(wallet: string | undefined) {
       // Reduce list of paid project ids
       setProjectIds(
         participants?.reduce((acc, curr) => {
-          const projectId = curr?.project?.id?.toString()
+          const projectId = curr?.project.projectId
 
           return [
             ...acc,
             ...(projectId ? (acc.includes(projectId) ? [] : [projectId]) : []),
           ]
-        }, [] as string[]),
+        }, [] as number[]),
       )
 
       setLoadingParticipants(false)
@@ -436,25 +391,5 @@ export function useInfiniteProjectsQuery(opts: ProjectsOptions) {
   return useInfiniteSubgraphQuery(
     queryOpts(opts) as InfiniteGraphQueryOpts<'project', EntityKeys<'project'>>,
     { staleTime },
-  )
-}
-
-export function useProjectsVxQuery(opts: ProjectsVxOptions) {
-  return useSubgraphQuery(
-    {
-      ...(queryOptsVx(opts) as GraphQueryOpts<
-        'projectVx',
-        EntityKeys<'projectVx'>
-      >),
-      first: opts.pageSize,
-      skip:
-        opts.pageNumber && opts.pageSize
-          ? opts.pageNumber * opts.pageSize
-          : undefined,
-      url: 'https://api.studio.thegraph.com/query/2231/juicebox-dev-rinkeby/0.1.8',
-    },
-    {
-      staleTime,
-    },
   )
 }

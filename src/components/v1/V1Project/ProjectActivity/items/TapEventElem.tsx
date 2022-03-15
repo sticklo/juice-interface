@@ -12,12 +12,12 @@ import { formatWad } from 'utils/formatNumber'
 
 import { V1_CURRENCY_ETH } from 'constants/v1/currency'
 
-import { smallHeaderStyle } from '../styles'
+import { smallHeaderStyle } from '../../styles'
 
 export default function TapEventElem({
-  tapEvent,
+  event,
 }: {
-  tapEvent:
+  event:
     | Pick<
         TapEvent,
         | 'id'
@@ -46,15 +46,15 @@ export default function TapEventElem({
     ],
     orderDirection: 'desc',
     orderBy: 'modCut',
-    where: tapEvent?.id
+    where: event?.id
       ? {
           key: 'tapEvent',
-          value: tapEvent.id,
+          value: event.id,
         }
       : undefined,
   })
 
-  if (!tapEvent) return null
+  if (!event) return null
 
   return (
     <div
@@ -78,13 +78,13 @@ export default function TapEventElem({
           }}
         >
           <div style={smallHeaderStyle(colors)}>
-            {tapEvent.timestamp && (
-              <span>{formatHistoricalDate(tapEvent.timestamp * 1000)}</span>
+            {event.timestamp && (
+              <span>{formatHistoricalDate(event.timestamp * 1000)}</span>
             )}{' '}
-            <EtherscanLink value={tapEvent.txHash} type="tx" />
+            <EtherscanLink value={event.txHash} type="tx" />
           </div>
           <div style={smallHeaderStyle(colors)}>
-            called by <FormattedAddress address={tapEvent.caller} />
+            called by <FormattedAddress address={event.caller} />
           </div>
         </div>
       </div>
@@ -118,7 +118,7 @@ export default function TapEventElem({
           </div>
         ))}
 
-        {tapEvent.beneficiaryTransferAmount?.gt(0) && (
+        {event.beneficiaryTransferAmount?.gt(0) && (
           <div
             style={{
               display: 'flex',
@@ -131,7 +131,7 @@ export default function TapEventElem({
             }}
           >
             <div style={{ fontWeight: 500 }}>
-              <FormattedAddress address={tapEvent.beneficiary} />:
+              <FormattedAddress address={event.beneficiary} />:
             </div>
             <div
               style={
@@ -141,7 +141,7 @@ export default function TapEventElem({
               }
             >
               <CurrencySymbol currency={V1_CURRENCY_ETH} />
-              {formatWad(tapEvent.beneficiaryTransferAmount, { precision: 4 })}
+              {formatWad(event.beneficiaryTransferAmount, { precision: 4 })}
             </div>
           </div>
         )}
@@ -156,7 +156,7 @@ export default function TapEventElem({
           }}
         >
           <CurrencySymbol currency={V1_CURRENCY_ETH} />
-          {formatWad(tapEvent.netTransferAmount, { precision: 4 })}
+          {formatWad(event.netTransferAmount, { precision: 4 })}
         </div>
       ) : null}
     </div>
